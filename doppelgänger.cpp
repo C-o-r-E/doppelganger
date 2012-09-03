@@ -94,7 +94,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 
 	//for now stick to the first one
-	dTop = 1;
+	dTop = 0;
 
 
 	_tprintf(_T("\nTrying to get output...\n"));
@@ -229,7 +229,20 @@ int _tmain(int argc, _TCHAR* argv[])
 				_tprintf(_T("Failed to get frame dirty rects\n"));
 				return 1;
 			}
-			_tprintf(_T("Dirty rects: %d\n"), BufSize / sizeof(RECT));
+			UINT dirty = BufSize / sizeof(RECT);
+			_tprintf(_T("Dirty rects: %d\n"), dirty);
+
+			RECT* pRect = (RECT*) DirtyRects;
+			for(i = 0; i<dirty; ++i)
+			{
+				_tprintf(_T("\tRect: (%d, %d), (%d, %d)\n"),
+					pRect->left,
+					pRect->top,
+					pRect->right,
+					pRect->bottom);
+
+				++pRect;
+			}
 			
 
 		}
