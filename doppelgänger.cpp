@@ -9,6 +9,8 @@ ID3D11Device* MeinDevice;
 ID3D11DeviceContext* MeinContext;
 IDXGIOutputDuplication* MeinDeskDupl;
 ID3D11Texture2D* MeinAcquiredDesktopImage;
+BYTE* MeinMetaDataBuffer = nullptr;
+UINT MeinMetaDataSize = 0;
 
 int _tmain(int argc, _TCHAR* argv[])
 {
@@ -92,7 +94,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 
 	//for now stick to the first one
-	dTop = 0;
+	dTop = 1;
 
 
 	_tprintf(_T("\nTrying to get output...\n"));
@@ -147,42 +149,101 @@ int _tmain(int argc, _TCHAR* argv[])
     DXGI_OUTDUPL_FRAME_INFO FrameInfo;
 
 	UINT t = 0;
-	while(t<2){
-	_tprintf(_T("\nTrying to acquire a frame...\n"));
-	HRESULT hr = MeinDeskDupl->AcquireNextFrame(500, &FrameInfo, &DesktopResource);
-    if (hr == DXGI_ERROR_WAIT_TIMEOUT)
-    {
-        _tprintf(_T("Timeout\n"));
-		return 1;
-    }
+	while(t<5)
+	{
+		_tprintf(_T("\nTrying to acquire a frame...\n"));
+		HRESULT hr = MeinDeskDupl->AcquireNextFrame(500, &FrameInfo, &DesktopResource);
+		_tprintf(_T("hr = %#0X\n"), hr);
+		if (hr == DXGI_ERROR_WAIT_TIMEOUT)
+		{
+			_tprintf(_T("Timeout\n"));
+			return 1;
+		}
 
-    if (FAILED(hr))
-    {
-		_tprintf(_T("Failed to acquire next frame\n"));
-		return 1;
-    }
-	_tprintf(_T("Gut!\n"));
+		if (FAILED(hr))
+		{
+			_tprintf(_T("Failed to acquire next frame\n"));
+			return 1;
+		}
+		_tprintf(_T("Gut!\n"));
 
-	///////////////////////////////////////////////
+		///////////////////////////////////////////////
+
+		//guessing this must be null
+		MeinAcquiredDesktopImage = nullptr;
+		_tprintf(_T("Trying to QI for ID3D11Texture2D...\n"));
+		hr = DesktopResource->QueryInterface(__uuidof(ID3D11Texture2D), (void**) &MeinAcquiredDesktopImage);
+		DesktopResource->Release();
+		DesktopResource = nullptr;
+		if (FAILED(hr))
+		{
+			_tprintf(_T("Failed to QI for ID3D11Texture2D from acquired IDXGIResource\n"));
+			 return 1;
+		}
+		_tprintf(_T("Gut!\n"));
+
+		_tprintf(_T("FrameInfo\n"));
+		_tprintf(_T("\tAccumulated Frames: %d\n"), FrameInfo.AccumulatedFrames);
+		_tprintf(_T("\tCoalesced Rectangles: %d\n"), FrameInfo.RectsCoalesced);
+		_tprintf(_T("\tMetadata buffer size: %d\n"), FrameInfo.TotalMetadataBufferSize);
 
 
-	_tprintf(_T("Trying to QI for ID3D11Texture2D...\n"));
-	hr = DesktopResource->QueryInterface(__uuidof(ID3D11Texture2D), (void**) &MeinAcquiredDesktopImage);
-    DesktopResource->Release();
-    DesktopResource = nullptr;
-    if (FAILED(hr))
-    {
-        _tprintf(_T("Failed to QI for ID3D11Texture2D from acquired IDXGIResource\n"));
-		 return 1;
-    }
-	_tprintf(_T("Gut!\n"));
+		if(FrameInfo.TotalMetadataBufferSize)
+		{
 
-	_tprintf(_T("FrameInfo\n"));
-	_tprintf(_T("\tAccumulated Frames: %d\n"), FrameInfo.AccumulatedFrames);
-	_tprintf(_T("\tCoalesced Rectangles: %d\n"), FrameInfo.RectsCoalesced);
-	_tprintf(_T("\tMetadata buffer size: %d\n"), FrameInfo.TotalMetadataBufferSize);
+			if (FrameInfo.TotalMetadataBufferSize > MeinMetaDataSize)
+			{
+				if (MeinMetaDataBuffer)
+				{
+					free(MeinMetaDataBuffer);
+					MeinMetaDataBuffer = nullptr;
+				}
+				MeinMetaDataBuffer = (BYTE*) malloc(FrameInfo.TotalMetadataBufferSize);
+				if (!MeinMetaDataBuffer)
+				{
+					MeinMetaDataSize = 0;
+					_tprintf(_T("Failed to allocate memory for metadata\n"));
+					return 1;
+				}
+				MeinMetaDataSize = FrameInfo.TotalMetadataBufferSize;
+			}
 
-	++t;
+			UINT BufSize = FrameInfo.TotalMetadataBufferSize;
+
+			// Get move rectangles
+			hr = MeinDeskDupl->GetFrameMoveRects(BufSize, (DXGI_OUTDUPL_MOVE_RECT*) MeinMetaDataBuffer, &BufSize);
+			if (FAILED(hr))
+			{
+				_tprintf(_T("Failed to get frame move rects\n"));
+				return 1;
+			}
+			_tprintf(_T("Move rects: %d\n"), BufSize / sizeof(DXGI_OUTDUPL_MOVE_RECT));
+
+			BYTE* DirtyRects = MeinMetaDataBuffer + BufSize;
+			BufSize = FrameInfo.TotalMetadataBufferSize - BufSize;
+
+			 // Get dirty rectangles
+			hr = MeinDeskDupl->GetFrameDirtyRects(BufSize, (RECT*) DirtyRects, &BufSize);
+			if (FAILED(hr))
+			{
+				_tprintf(_T("Failed to get frame dirty rects\n"));
+				return 1;
+			}
+			_tprintf(_T("Dirty rects: %d\n"), BufSize / sizeof(RECT));
+			
+
+		}
+
+
+		hr = MeinDeskDupl->ReleaseFrame();
+		if (FAILED(hr))
+		{
+			_tprintf(_T("Failed to release frame\n"));
+			return 1;
+		}
+
+		Sleep(200);
+		++t;
 	}
 	return 0;
 }
