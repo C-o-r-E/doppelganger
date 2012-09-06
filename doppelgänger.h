@@ -1,6 +1,8 @@
 #ifndef doppel_h
 #define doppel_h
 
+#define CINTERFACE
+
 #include <D3D11.h>
 #include <dxgi1_2.h>
 

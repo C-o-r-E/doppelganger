@@ -9,21 +9,45 @@ ID3D11Device* MeinDevice;
 ID3D11DeviceContext* MeinContext;
 IDXGIOutputDuplication* MeinDeskDupl;
 ID3D11Texture2D* MeinAcquiredDesktopImage;
-BYTE* MeinMetaDataBuffer = nullptr;
+BYTE* MeinMetaDataBuffer = NULL;
 UINT MeinMetaDataSize = 0;
 
 int _tmain(int argc, _TCHAR* argv[])
 {
+	UINT DriverTypeIndex;
+	IDXGIDevice* DxgiDevice = NULL;
+	IDXGIAdapter* DxgiAdapter = NULL;
 
+	DXGI_OUTPUT_DESC desc;
+	UINT i = 0, t, BufSize;
+	UINT dTop;
+	IDXGIOutput * pOutput;
+
+	IDXGIOutput* DxgiOutput = NULL;
+
+	IDXGIOutput1* DxgiOutput1 = NULL;
+
+	IDXGIResource* DesktopResource = NULL;
+    DXGI_OUTDUPL_FRAME_INFO FrameInfo;
+
+	BYTE* DirtyRects;
+
+	UINT dirty;
+	RECT* pRect;
 
 	///////////////////////////////////////////////////////
+
+	//guessing this must be null
+	MeinAcquiredDesktopImage = NULL;
+
+
 	_tprintf(_T("Hallo, welt!\n"));
 
 	_tprintf(_T("Trying to create a DX11 Device...\n"));
 	// Create device
-	for (UINT DriverTypeIndex = 0; DriverTypeIndex < NumDriverTypes; ++DriverTypeIndex)
+	for (DriverTypeIndex = 0; DriverTypeIndex < NumDriverTypes; ++DriverTypeIndex)
 	{
-		hr = D3D11CreateDevice(nullptr, DriverTypes[DriverTypeIndex], nullptr, 0, FeatureLevels, NumFeatureLevels,
+		hr = D3D11CreateDevice(NULL, DriverTypes[DriverTypeIndex], NULL, 0, FeatureLevels, NumFeatureLevels,
 								D3D11_SDK_VERSION, &MeinDevice, &FeatureLevel, &MeinContext);
 		if (SUCCEEDED(hr))
 		{
@@ -40,9 +64,10 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	///////////////////////////////////////////////////////
 
+	
 	_tprintf(_T("Trying to get QI for DXGI Device...\n"));
-	IDXGIDevice* DxgiDevice = nullptr;
-	hr = MeinDevice->QueryInterface(__uuidof(IDXGIDevice), (void**) &DxgiDevice);
+	
+	hr = MeinDevice->lpVtbl->QueryInterface(MeinDevice, &IID_IDXGIDevice, (void**) &DxgiDevice);
 	if (FAILED(hr))
     {
 		_tprintf(_T("Failed to get QI for DXGI Device\n"));
@@ -50,35 +75,33 @@ int _tmain(int argc, _TCHAR* argv[])
     }
 	_tprintf(_T("Gut!\n"));
 
-
 	//////////////////////////////////////////////////////////
 
 	_tprintf(_T("Trying to get adapter for DXGI Device...\n"));
-	IDXGIAdapter* DxgiAdapter = nullptr;
-    hr = DxgiDevice->GetParent(__uuidof(IDXGIAdapter), (void**) &DxgiAdapter);
-    DxgiDevice->Release();
-    DxgiDevice = nullptr;
+	
+	hr = DxgiDevice->lpVtbl->GetParent(DxgiDevice, &IID_IDXGIAdapter, (void**) &DxgiAdapter);
+	DxgiDevice->lpVtbl->Release(DxgiDevice);
+    DxgiDevice = NULL;
     if (FAILED(hr))
     {
         _tprintf(_T("Failed to get parent DXGI Adapter\n"));
 		return 1;
     }
 	_tprintf(_T("Gut!\n"));
-
+	
 	////////////////////////////////////////////////////////////
 
-	DXGI_OUTPUT_DESC desc;
+	
 	memset(&desc, 0, sizeof(desc));
 
-	UINT i = 0;
-	UINT dTop;
-	IDXGIOutput * pOutput;
+	
+	
 	_tprintf(_T("\nLooping through ouputs on DXGI adapter...\n"));
-	while(DxgiAdapter->EnumOutputs(i, &pOutput) != DXGI_ERROR_NOT_FOUND)
+	while(DxgiAdapter->lpVtbl->EnumOutputs(DxgiAdapter, i, &pOutput) != DXGI_ERROR_NOT_FOUND)
 	{
 		DXGI_OUTPUT_DESC* pDesc = &desc;
 
-		hr = pOutput->GetDesc(pDesc);
+		hr = pOutput->lpVtbl->GetDesc(pOutput, pDesc);
 		if (FAILED(hr))
 		{
 			_tprintf(_T("Failed to get description\n"));
@@ -98,36 +121,35 @@ int _tmain(int argc, _TCHAR* argv[])
 
 
 	_tprintf(_T("\nTrying to get output...\n"));
-	IDXGIOutput* DxgiOutput = nullptr;
-    hr = DxgiAdapter->EnumOutputs(dTop, &DxgiOutput);
-    DxgiAdapter->Release();
-    DxgiAdapter = nullptr;
+    hr = DxgiAdapter->lpVtbl->EnumOutputs(DxgiAdapter, dTop, &DxgiOutput);
+    DxgiAdapter->lpVtbl->Release(DxgiAdapter);
+    DxgiAdapter = NULL;
     if (FAILED(hr))
     {
         _tprintf(_T("Failed to get output\n"));
 		return 1;
 	}
 	_tprintf(_T("Gut!\n"));
+	
 	//////////////////////////////////////////////
 
 	_tprintf(_T("Trying to get IDXGIOutput1...\n"));
-	IDXGIOutput1* DxgiOutput1 = nullptr;
-    hr = DxgiOutput->QueryInterface(__uuidof(DxgiOutput1), (void**) &DxgiOutput1);
-    DxgiOutput->Release();
-    DxgiOutput = nullptr;
+	hr = DxgiOutput->lpVtbl->QueryInterface(DxgiOutput, &IID_IDXGIOutput1, (void**) &DxgiOutput1);
+	DxgiOutput->lpVtbl->Release(DxgiOutput);
+    DxgiOutput = NULL;
     if (FAILED(hr))
     {
          _tprintf(_T("Failed to get IDXGIOutput1\n"));
 		return 1;
     }
 	_tprintf(_T("Gut!\n"));
-
+	
 	//////////////////////////////////////////////
 
 	_tprintf(_T("Trying to duplicate the output...\n"));
-	hr = DxgiOutput1->DuplicateOutput(MeinDevice, &MeinDeskDupl);
-    DxgiOutput1->Release();
-    DxgiOutput1 = nullptr;
+	hr = DxgiOutput1->lpVtbl->DuplicateOutput(DxgiOutput1, (IUnknown*)MeinDevice, &MeinDeskDupl);
+	DxgiOutput1->lpVtbl->Release(DxgiOutput1);
+    DxgiOutput1 = NULL;
     if (FAILED(hr))
     {
         if (hr == DXGI_ERROR_NOT_CURRENTLY_AVAILABLE)
@@ -140,19 +162,18 @@ int _tmain(int argc, _TCHAR* argv[])
     }
 	_tprintf(_T("Gut! Init Complete!\n"));
 
-
+	
 	///////////////////////////////////////////////
 	///////////////////////////////////////////////
 	///////////////////////////////////////////////
 
-	IDXGIResource* DesktopResource = nullptr;
-    DXGI_OUTDUPL_FRAME_INFO FrameInfo;
+	
 
-	UINT t = 0;
+	t = 0;
 	while(t<5)
 	{
 		_tprintf(_T("\nTrying to acquire a frame...\n"));
-		HRESULT hr = MeinDeskDupl->AcquireNextFrame(500, &FrameInfo, &DesktopResource);
+		hr = MeinDeskDupl->lpVtbl->AcquireNextFrame(MeinDeskDupl, 500, &FrameInfo, &DesktopResource);
 		_tprintf(_T("hr = %#0X\n"), hr);
 		if (hr == DXGI_ERROR_WAIT_TIMEOUT)
 		{
@@ -169,12 +190,11 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		///////////////////////////////////////////////
 
-		//guessing this must be null
-		MeinAcquiredDesktopImage = nullptr;
+		
 		_tprintf(_T("Trying to QI for ID3D11Texture2D...\n"));
-		hr = DesktopResource->QueryInterface(__uuidof(ID3D11Texture2D), (void**) &MeinAcquiredDesktopImage);
-		DesktopResource->Release();
-		DesktopResource = nullptr;
+		hr = DesktopResource->lpVtbl->QueryInterface(DesktopResource, &IID_ID3D11Texture2D, (void**) &MeinAcquiredDesktopImage);
+		DesktopResource->lpVtbl->Release(DesktopResource);
+		DesktopResource = NULL;
 		if (FAILED(hr))
 		{
 			_tprintf(_T("Failed to QI for ID3D11Texture2D from acquired IDXGIResource\n"));
@@ -196,7 +216,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				if (MeinMetaDataBuffer)
 				{
 					free(MeinMetaDataBuffer);
-					MeinMetaDataBuffer = nullptr;
+					MeinMetaDataBuffer = NULL;
 				}
 				MeinMetaDataBuffer = (BYTE*) malloc(FrameInfo.TotalMetadataBufferSize);
 				if (!MeinMetaDataBuffer)
@@ -208,10 +228,10 @@ int _tmain(int argc, _TCHAR* argv[])
 				MeinMetaDataSize = FrameInfo.TotalMetadataBufferSize;
 			}
 
-			UINT BufSize = FrameInfo.TotalMetadataBufferSize;
+			BufSize = FrameInfo.TotalMetadataBufferSize;
 
 			// Get move rectangles
-			hr = MeinDeskDupl->GetFrameMoveRects(BufSize, (DXGI_OUTDUPL_MOVE_RECT*) MeinMetaDataBuffer, &BufSize);
+			hr = MeinDeskDupl->lpVtbl->GetFrameMoveRects(MeinDeskDupl, BufSize, (DXGI_OUTDUPL_MOVE_RECT*) MeinMetaDataBuffer, &BufSize);
 			if (FAILED(hr))
 			{
 				_tprintf(_T("Failed to get frame move rects\n"));
@@ -219,20 +239,20 @@ int _tmain(int argc, _TCHAR* argv[])
 			}
 			_tprintf(_T("Move rects: %d\n"), BufSize / sizeof(DXGI_OUTDUPL_MOVE_RECT));
 
-			BYTE* DirtyRects = MeinMetaDataBuffer + BufSize;
+			DirtyRects = MeinMetaDataBuffer + BufSize;
 			BufSize = FrameInfo.TotalMetadataBufferSize - BufSize;
 
 			 // Get dirty rectangles
-			hr = MeinDeskDupl->GetFrameDirtyRects(BufSize, (RECT*) DirtyRects, &BufSize);
+			hr = MeinDeskDupl->lpVtbl->GetFrameDirtyRects(MeinDeskDupl, BufSize, (RECT*) DirtyRects, &BufSize);
 			if (FAILED(hr))
 			{
 				_tprintf(_T("Failed to get frame dirty rects\n"));
 				return 1;
 			}
-			UINT dirty = BufSize / sizeof(RECT);
+			dirty = BufSize / sizeof(RECT);
 			_tprintf(_T("Dirty rects: %d\n"), dirty);
 
-			RECT* pRect = (RECT*) DirtyRects;
+			pRect = (RECT*) DirtyRects;
 			for(i = 0; i<dirty; ++i)
 			{
 				_tprintf(_T("\tRect: (%d, %d), (%d, %d)\n"),
@@ -248,7 +268,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		}
 
 
-		hr = MeinDeskDupl->ReleaseFrame();
+		hr = MeinDeskDupl->lpVtbl->ReleaseFrame(MeinDeskDupl);
 		if (FAILED(hr))
 		{
 			_tprintf(_T("Failed to release frame\n"));
@@ -258,6 +278,8 @@ int _tmain(int argc, _TCHAR* argv[])
 		Sleep(200);
 		++t;
 	}
+
+	
 	return 0;
 }
 
