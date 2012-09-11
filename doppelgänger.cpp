@@ -35,6 +35,13 @@ int _tmain(int argc, _TCHAR* argv[])
 	UINT dirty;
 	RECT* pRect;
 
+
+	/////////////////////////////////////////////////////////
+
+	DXGI_OUTDUPL_DESC dd;
+	DXGI_MAPPED_RECT MeinData;
+	IDXGISurface* MeinSurface = NULL;
+
 	///////////////////////////////////////////////////////
 
 	//guessing this must be null
@@ -136,7 +143,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	_tprintf(_T("Trying to get IDXGIOutput1...\n"));
 	hr = DxgiOutput->lpVtbl->QueryInterface(DxgiOutput, &IID_IDXGIOutput1, (void**) &DxgiOutput1);
 	DxgiOutput->lpVtbl->Release(DxgiOutput);
-    DxgiOutput = NULL;
+    //DxgiOutput = NULL;
     if (FAILED(hr))
     {
          _tprintf(_T("Failed to get IDXGIOutput1\n"));
@@ -170,7 +177,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	
 
 	t = 0;
-	while(t<5)
+	while(t<2)
 	{
 		_tprintf(_T("\nTrying to acquire a frame...\n"));
 		hr = MeinDeskDupl->lpVtbl->AcquireNextFrame(MeinDeskDupl, 500, &FrameInfo, &DesktopResource);
@@ -267,6 +274,19 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		}
 
+		
+		///// This is the part hr = 0x887a0004
+		_tprintf(_T("Trying to Data\n"));
+		hr = MeinDeskDupl->lpVtbl->MapDesktopSurface(MeinDeskDupl, &MeinData);
+		if (FAILED(hr))
+			{
+				_tprintf(_T("Failed to get Data\n"));
+				//return 1;
+			}
+		_tprintf(_T("Gut!\n"));
+
+		/////
+
 
 		hr = MeinDeskDupl->lpVtbl->ReleaseFrame(MeinDeskDupl);
 		if (FAILED(hr))
@@ -279,7 +299,31 @@ int _tmain(int argc, _TCHAR* argv[])
 		++t;
 	}
 
+
+	/////////////////////////////////////////
+	////// Now for some extra //////////////
+	///////////////////////////////////////
 	
+	_tprintf(_T("Trying to get surface\n"));
+	hr = MeinAcquiredDesktopImage->lpVtbl->QueryInterface(MeinAcquiredDesktopImage, &IID_IDXGISurface, &MeinSurface);
+	if (FAILED(hr))
+		{
+			_tprintf(_T("Failed to get surface\n"));
+			return 1;
+		}
+	_tprintf(_T("Gut!\n"));
+
+
+	//hr = E_INVALIDARG
+	_tprintf(_T("Trying to map rect\n"));
+	hr = MeinSurface->lpVtbl->Map(MeinSurface, &MeinData, DXGI_MAP_READ);
+	if (FAILED(hr))
+		{
+			_tprintf(_T("Failed to map rect hr=%#X\n"), hr);
+			//return 1;
+		}
+	_tprintf(_T("Gut!\n"));
+
 	return 0;
 }
 
