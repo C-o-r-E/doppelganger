@@ -1,18 +1,20 @@
 // doppelgänger.cpp : Defines the entry point for the console application.
 //
-
 #include "stdafx.h"
 #include "doppelgänger.h"
+#include "bitmap.h"
+
 
 void _getPixelData();
 
 HRESULT hr;
-ID3D11Device* MeinDevice;
-ID3D11DeviceContext* MeinContext;
-IDXGIOutputDuplication* MeinDeskDupl;
-ID3D11Texture2D* MeinAcquiredDesktopImage;
+ID3D11Device* MeinDevice = NULL;
+ID3D11DeviceContext* MeinContext = NULL;
+IDXGIOutputDuplication* MeinDeskDupl = NULL;
+ID3D11Texture2D* MeinAcquiredDesktopImage = NULL;
 BYTE* MeinMetaDataBuffer = NULL;
 UINT MeinMetaDataSize = 0;
+UINT frameCount = 0;
 
 int _tmain(int argc, _TCHAR* argv[])
 {
@@ -67,8 +69,6 @@ int _tmain(int argc, _TCHAR* argv[])
 		_tprintf(_T("Failed to create device in InitializeDx\n"));
 		return 1;
 	}
-	MeinDevice->lpVtbl->AddRef(MeinDevice);
-	MeinContext->lpVtbl->AddRef(MeinContext);
 	_tprintf(_T("Gut!\n"));
 
 	///////////////////////////////////////////////////////
@@ -102,9 +102,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	
 	memset(&desc, 0, sizeof(desc));
-
-	
-	
+	pOutput = NULL;
 	_tprintf(_T("\nLooping through ouputs on DXGI adapter...\n"));
 	while(DxgiAdapter->lpVtbl->EnumOutputs(DxgiAdapter, i, &pOutput) != DXGI_ERROR_NOT_FOUND)
 	{
@@ -122,6 +120,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		if(pDesc->AttachedToDesktop)
 			dTop = i;
 
+		pOutput->lpVtbl->Release(pOutput);
 		++i;
 	}
 
@@ -304,6 +303,8 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	MeinAcquiredDesktopImage->lpVtbl->Release(MeinAcquiredDesktopImage);
 	MeinAcquiredDesktopImage = NULL;
+	MeinDeskDupl->lpVtbl->Release(MeinDeskDupl);
+	MeinDeskDupl = NULL;
 	MeinContext->lpVtbl->Release(MeinContext);
 	MeinContext = NULL;
 	MeinDevice->lpVtbl->Release(MeinDevice);
@@ -316,18 +317,8 @@ void _getPixelData()
 {
 
 	DXGI_MAPPED_RECT MeinData;
-	//IDXGISurface stage;
-	//IDXGISurface* MeinSurface;
 	ID3D11Texture2D * sStage;
-	ID3D11Texture2D * sShared;
-	D3D11_TEXTURE2D_DESC DeskTexD;
 	D3D11_TEXTURE2D_DESC tDesc;
-	//D3D11_MAPPED_SUBRESOURCE msbr;
-
-	//msbr.DepthPitch = 0;
-	//msbr.RowPitch = 0;
-	//msbr.pData = NULL;
-		
 	D3D11_BOX Box;
 	IDXGISurface* surf;
 
@@ -360,22 +351,35 @@ void _getPixelData()
 	}
 	_tprintf(_T("Gut!\n"));
 
+	MeinContext->lpVtbl->CopySubresourceRegion(MeinContext, (ID3D11Resource*)sStage, 0,0,0,0, (ID3D11Resource*)MeinAcquiredDesktopImage, 0, &Box);	 
 		
-		
-	//MeinContext->lpVtbl->CopyResource(MeinContext, (ID3D11Resource*)sStage, (ID3D11Resource*)MeinAcquiredDesktopImage);
-	MeinContext->lpVtbl->CopySubresourceRegion(MeinContext, sStage, 0,0,0,0, MeinAcquiredDesktopImage, 0, &Box);	 
-	printf("omg\n");
-
-		
-	//MeinContext->lpVtbl->Map(MeinContext, (ID3D11Resource*)sStage, 0, D3D11_MAP_READ, NULL, &msbr);
-		
+	_tprintf(_T("Trying to QI staging surface\n"));
 	hr = sStage->lpVtbl->QueryInterface(sStage, &IID_IDXGISurface, (void**)&surf);
+	if (FAILED(hr))
+	{
+		_tprintf(_T("Failed to QI staging surface\n"));
+		exit(1);
+	}
+	_tprintf(_T("Gut!\n"));
 
+	_tprintf(_T("Trying to map staging surface\n"));
 	surf->lpVtbl->Map(surf, &MeinData, DXGI_MAP_READ);
-		
+	if (FAILED(hr))
+	{
+		_tprintf(_T("Failed to map staging surface\n"));
+		exit(1);
+	}
 	_tprintf(_T("Gut!\n"));
 		
 	//access pixel data 
+
+	{
+		char name[32];
+		memset(name, 0, 32);
+		sprintf_s(name, 32, "Frame%d.bmp", frameCount);
+		bitmap_write(name, MeinData.pBits, 1366, 768, 32);
+		++frameCount;
+	}
 	
 	surf->lpVtbl->Unmap(surf);
 	surf->lpVtbl->Release(surf);
@@ -383,5 +387,4 @@ void _getPixelData()
 	sStage->lpVtbl->Release(sStage);
 	sStage = NULL;
 }
-
 
