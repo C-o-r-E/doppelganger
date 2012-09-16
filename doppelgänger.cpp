@@ -4,6 +4,8 @@
 #include "stdafx.h"
 #include "doppelgänger.h"
 
+void _getPixelData();
+
 HRESULT hr;
 ID3D11Device* MeinDevice;
 ID3D11DeviceContext* MeinContext;
@@ -38,10 +40,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 	/////////////////////////////////////////////////////////
 
-	DXGI_OUTDUPL_DESC dd;
-	DXGI_MAPPED_RECT MeinData;
-	IDXGISurface stage;
-	IDXGISurface* MeinSurface;
+	
 
 	///////////////////////////////////////////////////////
 
@@ -83,7 +82,6 @@ int _tmain(int argc, _TCHAR* argv[])
 		_tprintf(_T("Failed to get QI for DXGI Device\n"));
         return 1;
     }
-	DxgiDevice->lpVtbl->AddRef(DxgiDevice);
 	_tprintf(_T("Gut!\n"));
 
 	//////////////////////////////////////////////////////////
@@ -98,7 +96,6 @@ int _tmain(int argc, _TCHAR* argv[])
         _tprintf(_T("Failed to get parent DXGI Adapter\n"));
 		return 1;
     }
-	DxgiAdapter->lpVtbl->AddRef(DxgiAdapter);
 	_tprintf(_T("Gut!\n"));
 	
 	////////////////////////////////////////////////////////////
@@ -141,7 +138,6 @@ int _tmain(int argc, _TCHAR* argv[])
         _tprintf(_T("Failed to get output\n"));
 		return 1;
 	}
-	DxgiOutput->lpVtbl->AddRef(DxgiOutput);
 	_tprintf(_T("Gut!\n"));
 	
 	//////////////////////////////////////////////
@@ -155,7 +151,6 @@ int _tmain(int argc, _TCHAR* argv[])
          _tprintf(_T("Failed to get IDXGIOutput1\n"));
 		return 1;
     }
-	DxgiOutput1->lpVtbl->AddRef(DxgiOutput1);
 	_tprintf(_T("Gut!\n"));
 	
 	//////////////////////////////////////////////
@@ -175,7 +170,6 @@ int _tmain(int argc, _TCHAR* argv[])
 		_tprintf(_T("Failed to get duplicate output\n"));
 		return 1;
     }
-	MeinDeskDupl->lpVtbl->AddRef(MeinDeskDupl);
 	_tprintf(_T("Gut! Init Complete!\n"));
 
 	
@@ -186,8 +180,14 @@ int _tmain(int argc, _TCHAR* argv[])
 	
 
 	t = 0;
-	while(t<2)
+	while(t<5)
 	{
+		if(MeinAcquiredDesktopImage)
+		{
+			MeinAcquiredDesktopImage->lpVtbl->Release(MeinAcquiredDesktopImage);
+			MeinAcquiredDesktopImage = NULL;
+		}
+
 		_tprintf(_T("\nTrying to acquire a frame...\n"));
 		hr = MeinDeskDupl->lpVtbl->AcquireNextFrame(MeinDeskDupl, 500, &FrameInfo, &DesktopResource);
 		_tprintf(_T("hr = %#0X\n"), hr);
@@ -202,7 +202,6 @@ int _tmain(int argc, _TCHAR* argv[])
 			_tprintf(_T("Failed to acquire next frame\n"));
 			return 1;
 		}
-		DesktopResource->lpVtbl->AddRef(DesktopResource);
 		_tprintf(_T("Gut!\n"));
 
 		///////////////////////////////////////////////
@@ -218,6 +217,7 @@ int _tmain(int argc, _TCHAR* argv[])
 			 return 1;
 		}
 		_tprintf(_T("Gut!\n"));
+
 
 		_tprintf(_T("FrameInfo\n"));
 		_tprintf(_T("\tAccumulated Frames: %d\n"), FrameInfo.AccumulatedFrames);
@@ -287,7 +287,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		/////
 		//////
 
-
+		_getPixelData();
 
 		hr = MeinDeskDupl->lpVtbl->ReleaseFrame(MeinDeskDupl);
 		if (FAILED(hr))
@@ -300,99 +300,88 @@ int _tmain(int argc, _TCHAR* argv[])
 		++t;
 	}
 
+	//cleanup
 
-	/////////////////////////////////////////
-	////// Now for some extra //////////////
-	///////////////////////////////////////
-
-	{
-		ID3D11Texture2D * sStage;
-		ID3D11Texture2D * sShared;
-		D3D11_TEXTURE2D_DESC DeskTexD;
-		D3D11_TEXTURE2D_DESC tDesc;
-		//D3D11_MAPPED_SUBRESOURCE msbr;
-
-		//msbr.DepthPitch = 0;
-		//msbr.RowPitch = 0;
-		//msbr.pData = NULL;
-		
-		D3D11_BOX Box;
-		IDXGISurface* surf;
-
-		Box.top = 0;
-		Box.left = 0;
-		Box.right = 1366;
-		Box.bottom = 768;
-		Box.front = 0;
-		Box.back = 1;
-		
-		RtlZeroMemory(&DeskTexD, sizeof(D3D11_TEXTURE2D_DESC));
-		DeskTexD.Width = 1366;
-		DeskTexD.Height = 768;
-		DeskTexD.MipLevels = 1;
-		DeskTexD.ArraySize = 1;
-		DeskTexD.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-		DeskTexD.SampleDesc.Count = 1;
-		DeskTexD.Usage = D3D11_USAGE_DEFAULT;
-		DeskTexD.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
-		DeskTexD.CPUAccessFlags = 0;
-		DeskTexD.MiscFlags = 0;//D3D11_RESOURCE_MISC_SHARED_KEYEDMUTEX;
-
-		tDesc.Width = 1366;
-		tDesc.Height = 768;
-		tDesc.MipLevels = 1;
-		tDesc.ArraySize = 1;
-		tDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-		tDesc.SampleDesc.Count = 1;
-		tDesc.SampleDesc.Quality = 0;
-		tDesc.Usage = D3D11_USAGE_STAGING;
-		tDesc.BindFlags = 0;
-		tDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;// | D3D11_CPU_ACCESS_WRITE;
-		tDesc.MiscFlags = 0;
-
-		_tprintf(_T("Trying to create shared surface\n"));
-		hr = MeinDevice->lpVtbl->CreateTexture2D(MeinDevice, &DeskTexD, NULL, &sShared);
-		if (FAILED(hr))
-		{
-			_tprintf(_T("Failed to create shared surface\n"));
-			return 1;
-		}
-		_tprintf(_T("Gut!\n"));
-
-		MeinAcquiredDesktopImage->lpVtbl->GetDesc(MeinAcquiredDesktopImage, &DeskTexD);
-
-
-		_tprintf(_T("Trying to create staging surface\n"));
-		hr = MeinDevice->lpVtbl->CreateTexture2D(MeinDevice, &tDesc, NULL, &sStage);
-		if (FAILED(hr))
-		{
-			_tprintf(_T("Failed to create staging surface\n"));
-			return 1;
-		}
-		_tprintf(_T("Gut!\n"));
-
-		
-		
-		MeinContext->lpVtbl->CopyResource(MeinContext, (ID3D11Resource*)sStage, (ID3D11Resource*)MeinAcquiredDesktopImage);
-		//MeinContext->lpVtbl->CopySubresourceRegion(MeinContext, &sStage, 0,0,0,0, &DesktopResource, 0, &Box);	 
-		printf("omg\n");
-
-		
-		//MeinContext->lpVtbl->Map(MeinContext, (ID3D11Resource*)sStage, 0, D3D11_MAP_READ, NULL, &msbr);
-
-		hr = sStage->lpVtbl->QueryInterface(sStage, &IID_IDXGISurface, (void**)&surf);
-
-		surf->lpVtbl->Map(surf, &MeinData, DXGI_MAP_READ);
-		
-		_tprintf(_T("Gut!\n"));
-		
-
-		//access pixel data 
-
-
-	}
+	MeinAcquiredDesktopImage->lpVtbl->Release(MeinAcquiredDesktopImage);
+	MeinAcquiredDesktopImage = NULL;
+	MeinContext->lpVtbl->Release(MeinContext);
+	MeinContext = NULL;
+	MeinDevice->lpVtbl->Release(MeinDevice);
+	MeinDevice = NULL;
 
 	return 0;
+}
+
+void _getPixelData()
+{
+
+	DXGI_MAPPED_RECT MeinData;
+	//IDXGISurface stage;
+	//IDXGISurface* MeinSurface;
+	ID3D11Texture2D * sStage;
+	ID3D11Texture2D * sShared;
+	D3D11_TEXTURE2D_DESC DeskTexD;
+	D3D11_TEXTURE2D_DESC tDesc;
+	//D3D11_MAPPED_SUBRESOURCE msbr;
+
+	//msbr.DepthPitch = 0;
+	//msbr.RowPitch = 0;
+	//msbr.pData = NULL;
+		
+	D3D11_BOX Box;
+	IDXGISurface* surf;
+
+	Box.top = 0;
+	Box.left = 0;
+	Box.right = 1366;
+	Box.bottom = 768;
+	Box.front = 0;
+	Box.back = 1;
+
+	tDesc.Width = 1366;
+	tDesc.Height = 768;
+	tDesc.MipLevels = 1;
+	tDesc.ArraySize = 1;
+	tDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+	tDesc.SampleDesc.Count = 1;
+	tDesc.SampleDesc.Quality = 0;
+	tDesc.Usage = D3D11_USAGE_STAGING;
+	tDesc.BindFlags = 0;
+	tDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;// | D3D11_CPU_ACCESS_WRITE;
+	tDesc.MiscFlags = 0;
+
+
+	_tprintf(_T("Trying to create staging surface\n"));
+	hr = MeinDevice->lpVtbl->CreateTexture2D(MeinDevice, &tDesc, NULL, &sStage);
+	if (FAILED(hr))
+	{
+		_tprintf(_T("Failed to create staging surface\n"));
+		exit(1);
+	}
+	_tprintf(_T("Gut!\n"));
+
+		
+		
+	//MeinContext->lpVtbl->CopyResource(MeinContext, (ID3D11Resource*)sStage, (ID3D11Resource*)MeinAcquiredDesktopImage);
+	MeinContext->lpVtbl->CopySubresourceRegion(MeinContext, sStage, 0,0,0,0, MeinAcquiredDesktopImage, 0, &Box);	 
+	printf("omg\n");
+
+		
+	//MeinContext->lpVtbl->Map(MeinContext, (ID3D11Resource*)sStage, 0, D3D11_MAP_READ, NULL, &msbr);
+		
+	hr = sStage->lpVtbl->QueryInterface(sStage, &IID_IDXGISurface, (void**)&surf);
+
+	surf->lpVtbl->Map(surf, &MeinData, DXGI_MAP_READ);
+		
+	_tprintf(_T("Gut!\n"));
+		
+	//access pixel data 
+	
+	surf->lpVtbl->Unmap(surf);
+	surf->lpVtbl->Release(surf);
+	surf = NULL;
+	sStage->lpVtbl->Release(sStage);
+	sStage = NULL;
 }
 
 
